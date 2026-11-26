@@ -24,7 +24,11 @@ def _record_login(user):
 
 @main.route('/')
 def index():
-    return render_template('index.html', featured=Skill.query.order_by(Skill.name).limit(6).all())
+    try:
+        featured = Skill.query.order_by(Skill.name).limit(6).all()
+    except Exception:
+        featured = []
+    return render_template('index.html', featured=featured)
 
 
 @main.route('/dashboard')
