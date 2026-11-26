@@ -1,4 +1,5 @@
 import os
+import tempfile
 from datetime import timedelta
 
 
@@ -6,7 +7,8 @@ def _database_uri():
     url = os.getenv('DATABASE_URL')
     if not url:
         if os.getenv('VERCEL'):
-            return 'sqlite:////tmp/skillbridge.db'
+            db_path = os.path.join(tempfile.gettempdir(), 'skillbridge.db').replace('\\', '/')
+            return f'sqlite:///{db_path}'
         return 'sqlite:///skillbridge.db'
     if url.startswith('postgres://'):
         return url.replace('postgres://', 'postgresql+psycopg://', 1)

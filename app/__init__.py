@@ -1,4 +1,5 @@
 import os
+import tempfile
 from flask import Flask
 from werkzeug.middleware.proxy_fix import ProxyFix
 from config import Config
@@ -6,7 +7,7 @@ from .extensions import db, migrate, login_manager, socketio, csrf
 
 
 def create_app(test_config=None):
-    kwargs = {'instance_path': '/tmp/instance'} if os.getenv('VERCEL') else {}
+    kwargs = {'instance_path': os.path.join(tempfile.gettempdir(), 'skillbridge-instance')} if os.getenv('VERCEL') else {}
     app = Flask(__name__, **kwargs)
     app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
     os.makedirs(app.instance_path, exist_ok=True)
@@ -43,7 +44,8 @@ def create_app(test_config=None):
         db.session.rollback()
         return {'error': 'Something went wrong. Please try again.'}, 500
 
-    if os.getenv('VERCEL') and app.config['SQLALCHEMY_DATABASE_URI'].startswith('sqlite:////tmp'):
+    tmp_prefix = f"sqlite:///{tempfile.gettempdir().replace(os.sep, '/')}"
+    if os.getenv('VERCEL') and app.config['SQLALCHEMY_DATABASE_URI'].startswith(tmp_prefix):
         with app.app_context():
             db.create_all()
 
