@@ -43,4 +43,8 @@ def create_app(test_config=None):
         db.session.rollback()
         return {'error': 'Something went wrong. Please try again.'}, 500
 
+    if os.getenv('VERCEL') and app.config['SQLALCHEMY_DATABASE_URI'].startswith('sqlite:////tmp'):
+        with app.app_context():
+            db.create_all()
+
     return app
