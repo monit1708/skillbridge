@@ -342,14 +342,23 @@ def create_request():
         return jsonify(error='You cannot request an exchange with yourself.'), 400
     has_offer = UserSkill.query.filter_by(user_id=current_user.id, skill_id=teach_id, direction='teach').first()
     their_teach = UserSkill.query.filter_by(user_id=target.id, skill_id=learn_id, direction='teach').first()
-    if not has_offer or not their_teach:
-        return jsonify(error='Request skills must form a mutual match.'), 400
-    target_learns = UserSkill.query.filter_by(user_id=target.id, direction='learn').all()
-    my_learns = UserSkill.query.filter_by(user_id=current_user.id, direction='learn').all()
-    has_need = any(skill_relevance(has_offer.skill, link.skill) > 0 for link in target_learns)
-    reciprocal = any(skill_relevance(their_teach.skill, link.skill) > 0 for link in my_learns)
-    if not has_need or not reciprocal:
-        return jsonify(error='Request skills must form a mutual match.'), 400
+    is_mutual = False
+    if has_offer and their_teach:
+        target_learns = UserSkill.query.filter_by(user_id=target.id, direction='learn').all()
+        my_learns = UserSkill.query.filter_by(user_id=current_user.id, direction='learn').all()
+        has_need = any(skill_relevance(has_offer.skill, link.skill) > 0 for link in target_learns)
+        reciprocal = any(skill_relevance(their_teach.skill, link.skill) > 0 for link in my_learns)
+        is_mutual = has_need and reciprocal
+
+    # Also allow connecting on a one-way relevant skill match (teach <-> learn).
+    their_learn = UserSkill.query.filter_by(user_id=target.id, skill_id=learn_id, direction='learn').first()
+    one_way_teach = bool(has_offer and their_learn and skill_relevance(has_offer.skill, their_learn.skill) > 0)
+    their_offer = UserSkill.query.filter_by(user_id=target.id, skill_id=teach_id, direction='teach').first()
+    my_learn = UserSkill.query.filter_by(user_id=current_user.id, skill_id=learn_id, direction='learn').first()
+    one_way_learn = bool(their_offer and my_learn and skill_relevance(their_offer.skill, my_learn.skill) > 0)
+
+    if not (is_mutual or one_way_teach or one_way_learn):
+        return jsonify(error='Request skills must form a relevant or mutual match.'), 400
     if ExchangeRequest.query.filter_by(sender_id=current_user.id, receiver_id=target.id, status='pending').first():
         return jsonify(error='You already have a pending request.'), 409
     req = ExchangeRequest(sender_id=current_user.id, receiver_id=target.id, teach_skill_id=teach_id, learn_skill_id=learn_id)

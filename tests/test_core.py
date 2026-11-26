@@ -218,3 +218,32 @@ def test_http_chat_messages_across_users(client, app):
     r4 = client.get(f'/api/conversations/{cid}/messages?after={msg_id}')
     assert r4.status_code == 200
     assert len(r4.json['messages']) == 1 and r4.json['messages'][0]['sender'] == 'Bob'
+
+
+def test_one_skill_relevant_connect_and_chat(client, app):
+    with app.app_context():
+        a = user('Teacher', 'teach1@example.edu')
+        b = user('Learner', 'learn1@example.edu')
+        py = Skill(name='Python')
+        db.session.add(py)
+        db.session.flush()
+        db.session.add_all([
+            UserSkill(user_id=a.id, skill_id=py.id, direction='teach', proficiency=5),
+            UserSkill(user_id=b.id, skill_id=py.id, direction='learn', proficiency=2),
+        ])
+        db.session.commit()
+        bid, py_id = b.id, py.id
+
+    client.post('/login', data={'email': 'teach1@example.edu', 'password': 'strong-password-123'})
+    r_req = client.post('/api/requests', json={'user_id': bid, 'teach_skill_id': py_id, 'learn_skill_id': py_id})
+    assert r_req.status_code == 201
+    client.post('/logout')
+
+    client.post('/login', data={'email': 'learn1@example.edu', 'password': 'strong-password-123'})
+    req_id = client.get('/api/requests').json[0]['id']
+    assert client.post(f'/api/requests/{req_id}/accept').status_code == 200
+    with app.app_context():
+        conv = Conversation.query.first()
+        assert conv is not None
+        cid = conv.id
+    assert client.post(f'/api/conversations/{cid}/messages', json={'body': 'Hi, ready to learn Python!'}).status_code == 201
