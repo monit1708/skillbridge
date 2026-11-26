@@ -83,13 +83,60 @@ def chat_page(conversation_id):
     conv = Conversation.query.get_or_404(conversation_id)
     if not can_access_conversation(conv, current_user.id):
         abort(403)
-    messages = Message.query.filter_by(conversation_id=conv.id).order_by(Message.created_at).limit(100).all()
+    messages = Message.query.filter_by(conversation_id=conv.id).order_by(Message.id).limit(100).all()
     return render_template('chat.html', conversation=conv, messages=messages)
 
 
 def can_access_conversation(conv, uid):
     req = conv.exchange.request
     return uid in (req.sender_id, req.receiver_id)
+
+
+@api.get('/conversations/<int:conversation_id>/messages')
+@login_required
+def get_conversation_messages(conversation_id):
+    conv = Conversation.query.get_or_404(conversation_id)
+    if not can_access_conversation(conv, current_user.id):
+        abort(403)
+    query = Message.query.filter_by(conversation_id=conv.id)
+    after = request.args.get('after', type=int)
+    if after:
+        query = query.filter(Message.id > after)
+    messages = query.order_by(Message.id).limit(100).all()
+    return jsonify(
+        messages=[
+            {
+                'id': m.id,
+                'sender': m.sender.name,
+                'sender_id': m.sender_id,
+                'body': m.body,
+                'created_at': m.created_at.isoformat(),
+            }
+            for m in messages
+        ]
+    )
+
+
+@api.post('/conversations/<int:conversation_id>/messages')
+@login_required
+def post_conversation_message(conversation_id):
+    conv = Conversation.query.get_or_404(conversation_id)
+    if not can_access_conversation(conv, current_user.id):
+        abort(403)
+    data = request.get_json(silent=True) or {}
+    body = str(data.get('body', '')).strip()
+    if not body or len(body) > 2000:
+        return jsonify(error='Message must be 1–2000 characters.'), 400
+    message = Message(conversation_id=conv.id, sender_id=current_user.id, body=body)
+    db.session.add(message)
+    db.session.commit()
+    return jsonify(
+        id=message.id,
+        sender=current_user.name,
+        sender_id=current_user.id,
+        body=message.body,
+        created_at=message.created_at.isoformat(),
+    ), 201
 
 
 @auth.route('/register', methods=['GET', 'POST'])

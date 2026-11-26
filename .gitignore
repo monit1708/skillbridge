@@ -2,6 +2,8 @@
 __pycache__/
 *.py[cod]
 .env
+.env.local
+.env*.local
 .env.save
 *.db
 instance/
@@ -9,3 +11,6 @@ instance/
 .pytest_cache/
 .mypy_cache/
 .vercel
+
+.vercel
+.env*

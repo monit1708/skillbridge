@@ -4,7 +4,7 @@ from datetime import timedelta
 
 
 def _database_uri():
-    url = os.getenv('DATABASE_URL')
+    url = os.getenv('DATABASE_URL') or os.getenv('POSTGRES_URL')
     if not url:
         if os.getenv('VERCEL'):
             db_path = os.path.join(tempfile.gettempdir(), 'skillbridge.db').replace('\\', '/')
@@ -21,6 +21,11 @@ class Config:
     SECRET_KEY = os.getenv('SECRET_KEY', 'dev-only-change-me-before-deploying')
     SQLALCHEMY_DATABASE_URI = _database_uri()
     SQLALCHEMY_TRACK_MODIFICATIONS = False
+    SQLALCHEMY_ENGINE_OPTIONS = (
+        {'pool_pre_ping': True, 'pool_recycle': 300}
+        if SQLALCHEMY_DATABASE_URI.startswith('postgresql')
+        else {}
+    )
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SAMESITE = 'Lax'
     SESSION_COOKIE_SECURE = os.getenv('COOKIE_SECURE', '0') == '1'

@@ -181,3 +181,40 @@ def test_admin_login_and_dashboard_metrics(client, app):
     assert student_row['login_count'] == 1
     assert student_row['skills_count'] == 1
     assert student_row['teach_skills'][0]['name'] == 'Python'
+
+
+def test_http_chat_messages_across_users(client, app):
+    with app.app_context():
+        a = user('Alice', 'chat-a@example.edu')
+        b = user('Bob', 'chat-b@example.edu')
+        j = Skill(name='Java')
+        p = Skill(name='Python')
+        db.session.add_all([j, p])
+        db.session.flush()
+        req = ExchangeRequest(sender_id=a.id, receiver_id=b.id, teach_skill_id=j.id, learn_skill_id=p.id, status='accepted')
+        db.session.add(req)
+        db.session.flush()
+        ex = Exchange(request_id=req.id)
+        db.session.add(ex)
+        db.session.flush()
+        conv = Conversation(exchange_id=ex.id)
+        db.session.add(conv)
+        db.session.commit()
+        cid = conv.id
+
+    client.post('/login', data={'email': 'chat-a@example.edu', 'password': 'strong-password-123'})
+    r1 = client.post(f'/api/conversations/{cid}/messages', json={'body': 'Hey Bob, ready to swap Python for Java?'})
+    assert r1.status_code == 201
+    msg_id = r1.json['id']
+    client.post('/logout')
+
+    client.post('/login', data={'email': 'chat-b@example.edu', 'password': 'strong-password-123'})
+    r2 = client.get(f'/api/conversations/{cid}/messages')
+    assert r2.status_code == 200
+    assert len(r2.json['messages']) == 1
+    assert r2.json['messages'][0]['body'] == 'Hey Bob, ready to swap Python for Java?'
+    r3 = client.post(f'/api/conversations/{cid}/messages', json={'body': 'Yes! Let us start now.'})
+    assert r3.status_code == 201
+    r4 = client.get(f'/api/conversations/{cid}/messages?after={msg_id}')
+    assert r4.status_code == 200
+    assert len(r4.json['messages']) == 1 and r4.json['messages'][0]['sender'] == 'Bob'
